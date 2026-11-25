@@ -21,7 +21,7 @@ Hạn gần nhất **Chủ nhật 29/11/2026**: giao bảng hiệu năng truy đ
 | Bank/index thật, peak VRAM/RAM thật, p50/p95 thật | Chưa đo | Cần baseline và Colab L4; không điền số giả |
 | Chi phí chọn coreset | Có helper, chưa đo thật | Cần ma trận features, lệnh chọn và ranh giới lựa chọn |
 | Bảng chất lượng theo ngân sách | Có script ghép, chờ quality.csv | Cần Đỗ Hoàng Phúc giao đúng run ID và nhóm ảnh |
-| Pull request | Xem trạng thái PR trên GitHub | Tài khoản Tiến chỉ có READ ở repo nhóm; dùng fork, không merge main |
+| Pull request | [Draft PR #1](https://github.com/huyryan220806/robust-memory-ad/pull/1) đã mở | Tài khoản Tiến chỉ có READ ở repo nhóm; dùng fork, không merge main |
 
 ## Bạn chuyển các câu này cho đúng người
 

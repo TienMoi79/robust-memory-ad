@@ -4,6 +4,8 @@ Trạng thái ngày **25/11/2026**: bộ đo CPU đã tự kiểm; **chưa có s
 Theo Huy qua Tiến, máy đo chính thức là **NVIDIA L4 trên Google Colab**.
 Hữu Huỳnh Phúc đang làm baseline; phần tích hợp chờ bàn giao, theo thống nhất với Tiến.
 
+[Mở notebook trong Colab](https://colab.research.google.com/github/TienMoi79/robust-memory-ad/blob/profiling/pilot/notebooks/profiling_colab.ipynb) · [Draft PR để Huy xem](https://github.com/huyryan220806/robust-memory-ad/pull/1).
+
 ## 1. Máy và điều kiện đo
 
 | Mục | Quy ước / tình trạng |
