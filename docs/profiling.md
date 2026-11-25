@@ -1,43 +1,18 @@
-# Quy trình đo bộ nhớ và độ trễ — Lê Quyết Tiến
+# Bộ đo profiling độc lập — Lê Quyết Tiến
 
-Trạng thái ngày **25/11/2026**: bộ đo CPU đã tự kiểm; **chưa có số đo PatchCore hoặc L4**.
-Theo Huy qua Tiến, máy đo chính thức là **NVIDIA L4 trên Google Colab**.
-Hữu Huỳnh Phúc đang làm baseline; phần tích hợp chờ bàn giao, theo thống nhất với Tiến.
+Cập nhật **25/11/2026**. Bản bàn giao này chỉ chứa dụng cụ độc lập đã tự kiểm trên CPU và log giả lập. **Chưa có kết quả PatchCore hoặc L4.** Thiết bị đo chính thức được Huy xác nhận qua Tiến là NVIDIA L4 trên Google Colab; chưa chạy trên thiết bị đó.
 
-[Mở notebook trong Colab](https://colab.research.google.com/github/TienMoi79/robust-memory-ad/blob/profiling/pilot/notebooks/profiling_colab.ipynb) · [Draft PR để Huy xem](https://github.com/huyryan220806/robust-memory-ad/pull/1).
+## Phần đã hoàn thành và có trong PR
 
-## 1. Máy và điều kiện đo
+- `scripts/profile.py`: ghi thời gian bằng đồng hồ đơn điệu, xuất từng mẫu CSV, tách warm-up và tính p50/p95.
+- Liệt kê byte/SHA-256 các tệp được khai báo, tách vai trò bank/index, backbone, metadata và bản trung gian; quy đổi 1 MB = 1.000.000 byte.
+- Ghi môi trường, cấu hình, trạng thái lượt đo và RSS tiến trình lấy mẫu; giữ log khi phép kiểm đầu ra thất bại, không ghi đè thư mục lượt cũ.
+- Helper `measure_selection` ghi thời gian một callback chọn coreset với metadata do bên gọi cung cấp; đã kiểm bằng callback giả lập.
+- Bảy phép kiểm tự động và log smoke CPU gồm 10 warm-up + 50 mẫu đo.
 
-| Mục | Quy ước / tình trạng |
-|---|---|
-| Máy chính thức | Google Colab, NVIDIA L4; notebook phải kiểm GPU thực nhận, không tự thay bằng GPU khác |
-| RAM, VRAM, CPU, OS, driver, thư viện | Lấy từ phiên Colab thực chạy; chưa điền bằng thông số quảng cáo |
-| Máy thử dụng cụ | Windows 11 Home Single Language 10.0.26200, i5-12450H, RAM 16.866.680.832 byte; RTX 4050 Laptop 6.141 MiB, driver 610.78 |
-| Môi trường thử | Python 3.12.5, PyTorch 2.12.1+cpu, psutil 7.2.2; không chạy CUDA |
-| Batch size | Đề xuất 1 để đo một ảnh; harness bắt buộc 1 |
-| Dtype, độ phân giải, decoder, normalization | Chờ cấu hình chính xác từ Phúc |
-| Truy vấn | Chờ loại index, CPU/GPU, số láng giềng, số luồng và tham số từ Phúc |
-| Nhóm sản phẩm, split, nhóm ánh sáng, thứ tự ảnh | Chờ nhóm chốt; phải giống nhau giữa các cấu hình so sánh |
-| Ngân sách | Random và greedy phải cùng số patch thực; ghi cả seed, tỷ lệ và số patch |
+Các điểm tích hợp mô hình và thông số chính thức sẽ bổ sung sau khi nhóm trả lời. PR hiện tại không chứa adapter PatchCore, config baseline, notebook Colab hoặc script ghép chất lượng chưa thống nhất đầu vào.
 
-`environment.json` lưu thư viện thực tế, CPU/OS/RAM, `nvidia-smi`, commit bộ đo và hash nguồn bộ đo.
-`config.json` lưu cấu hình đo, commit baseline, adapter và thứ tự ảnh; `images.json` lưu hash ảnh.
-Không xem một phiên Colab mới là cùng môi trường chỉ vì đều có nhãn L4.
-
-## 2. Ranh giới thời gian — còn chờ Huy xác nhận
-
-Đề xuất: ảnh **đã giải mã trong RAM** → tiền xử lý → tạo batch 1 → chuyển thiết bị → backbone → truy vấn bank/index → tạo điểm và map sẵn cho bên gọi.
-
-- Loại đọc đĩa, giải mã ảnh, nạp mô hình/bank, tạo index và ghi CSV khỏi thời gian từng ảnh.
-- Việc trả kết quả về CPU **chưa chốt**. Nếu pipeline đã trả điểm/map CPU thì phải ghi đó là phần của phép đo; không tự cắt ra.
-- Nạp mô hình và bank một lần, đặt `eval()` và chế độ inference/no-grad. Không cache kết quả suy luận.
-- Trước đồng hồ và sau phép tính cuối: đồng bộ GPU, kể cả công việc FAISS/stream ngoài framework nếu có.
-- Dùng `time.perf_counter_ns()`, xuất **ms**. Đầu ra phải được tính đầy đủ; không trả generator/lazy result.
-
-Điểm cần Phúc xác nhận trong mã upstream: `PatchCore.load_from_path`, đường suy luận `predict`/`_predict`, preprocessing và FAISS. Đây chỉ là các điểm tham khảo; **adapter phải theo đúng commit Phúc bàn giao**.
-Nguồn: [PatchCore](https://github.com/amazon-science/patchcore-inspection/blob/main/src/patchcore/patchcore.py), [FAISS wrapper](https://github.com/amazon-science/patchcore-inspection/blob/main/src/patchcore/common.py).
-
-## 3. Thử bộ đo ngay
+## Chạy phần đã tự kiểm
 
 Từ thư mục gốc repo:
 
@@ -47,65 +22,38 @@ python -m unittest discover -s tests -v
 python -m scripts.profile --smoke --output outputs/smoke-cpu-UNIQUE_ID
 ```
 
-`--smoke` dùng phép cộng giả lập CPU, **không có ảnh, bank hoặc mô hình anomaly detection**.
-Kết quả minh họa nằm trong `docs/evidence/smoke-cpu-20261125/`; không dùng các ms này trong bảng so sánh mô hình.
-Dãy kiểm `8,9,10,11,12` cho p50 = **10 ms**, p95 = **11,8 ms** theo nội suy tuyến tính.
+Thay `UNIQUE_ID` mỗi lần chạy; thư mục đã tồn tại sẽ bị từ chối để giữ nguyên log trước đó. Lệnh smoke không cần PyTorch hoặc dữ liệu mô hình. Nó dùng phép cộng số nguyên giả lập CPU, không đọc ảnh, không nạp bank và không chạy anomaly detection.
 
-## 4. Tích hợp khi Phúc giao baseline
+## Cách tính và log đã xác minh
 
-1. Nhận commit nguồn và môi trường đã khóa, cấu hình full/random/greedy, bank/index và trọng số; danh sách ảnh có thứ tự và `predictions.csv` (`run_id,image_id,image_score,map_path`). Không train lại hay chọn bank mới trong vòng đo.
-2. Điền `examples/adapter_template.py` theo pipeline thật. `load` kiểm HEAD baseline, nạp model/bank và đặt seed/dtype/eval; `decode` trả ảnh RAM; `predict` chứa đúng phạm vi đo; `image_score` lấy raw score. `synchronize` xử lý công việc ngoài PyTorch nếu cần.
-3. Sao chép `examples/pilot-l4.template.json` thành cấu hình riêng. Điền đường dẫn **tương đối với file config**, mọi trường `REPLACE`, số patch, budget và điểm tham chiếu. Đặt `baseline_commit_verified=true` chỉ sau khi adapter thực sự kiểm checkout. Không chạy file template nguyên trạng.
-4. Kiểm tolerance với Phúc (mặc định kỹ thuật `atol=rtol=1e-5` là đề xuất, chưa được nhóm chốt). Bộ đo so điểm của từng ảnh tham chiếu trước khi warm-up; sai thì dừng và lưu `validation.json`/`status.json`.
-5. Mở `notebooks/profiling_colab.ipynb` trong Colab. Chọn runtime GPU L4, kiểm `nvidia-smi` và PyTorch CUDA. Cài baseline bằng đúng hướng dẫn Phúc; **không tự nâng torch/FAISS bằng phiên bản tùy ý**.
-6. Chạy từ gốc repo:
+Đơn vị độ trễ: **ms**, từ chênh lệch `time.perf_counter_ns()`. Hàm `timed_call` gọi callback đồng bộ trước đồng hồ và sau callback công việc; phép kiểm xác nhận thứ tự này bằng mô phỏng, chưa xác minh CUDA thật.
 
-```bash
-python -m scripts.profile --config configs/pilot/YOUR_CONFIG.json --adapter examples.adapter_template:create_adapter --output outputs/YOUR_MEASUREMENT_ID
-```
+Phân vị dùng nội suy tuyến tính ở vị trí `(n-1)*q` của dãy đã sắp xếp. Dãy `8,9,10,11,12` có **p50 = 10 ms**, **p95 = 11,8 ms**. Dãy âm, rỗng hoặc không hữu hạn bị từ chối.
 
-Harness không tích hợp được baseline cho đến khi adapter được điền. Không có fallback CPU cho cấu hình L4. Nếu không thuê/nhận được L4, ghi bị chặn và hỏi Huy nơi chạy, không thay thiết bị âm thầm.
+Log tham khảo: `docs/evidence/smoke-cpu-20261125/`. Đã tính lại p50/p95 từ 50 dòng `timings.csv` và đối chiếu hash nguồn bộ đo trong `environment.json`. Đây là log tự kiểm, không phải bảng hiệu năng mô hình.
 
-## 5. Pilot: 10 warm-up + 50 mẫu đo ban đầu
+| Tệp | Nội dung |
+|---|---|
+| `config.json`, `environment.json` | Tham số thử và môi trường thực; commit, trạng thái cây mã và hash bộ đo |
+| `validation.json`, `status.json` | Đối chiếu đầu ra giả lập và trạng thái hoàn tất/thất bại |
+| `warmup.csv` | Các lượt làm nóng, không đưa vào phân vị |
+| `timings.csv`, `efficiency.csv` | Từng mẫu sau warm-up và bảng tổng hợp có thể tính lại |
+| `rss_samples.csv`, `memory.json` | RSS trước vòng đo, các mẫu RSS, peak quan sát và phạm vi công cụ |
+| `artifacts.json`, `images.json` | Danh mục/hash theo đầu vào; smoke không có bank hoặc ảnh |
+| `stability.json` | p95 hai nửa dãy để xem xét; không tự kết luận số đo ổn định |
 
-Đây là điểm bắt đầu, chưa phải bảo đảm ổn định. Warm-up và đo chạy cùng đường tiền xử lý. Ảnh được xoay vòng theo danh sách cố định; 50 lượt có thể lặp lại ảnh, không mặc nhiên là 50 ảnh khác nhau. Dùng cùng danh sách và thứ tự giữa full/random/greedy.
+Môi trường smoke: Windows 11, i5-12450H, RAM 16.866.680.832 byte, Python 3.12.5, psutil 7.2.2. PyTorch đang cài là bản CPU; RTX 4050 trên máy không được dùng trong smoke.
 
-`warmup.csv` giữ thời gian làm nóng, `timings.csv` chỉ giữ mẫu sau warm-up. Xem dãy gốc và `stability.json` (p95 hai nửa); nếu biến động, lặp **đúng cấu hình** với `measurement_id` mới, ghi lý do trong nhật ký và cân nhắc tăng số lượt. Không xóa outlier, không sửa log cũ. Kiểm tiến trình khác, nạp bank trong loop, cấp phát đầu, đọc tệp và đồng bộ theo từng giả thuyết có thể tái hiện.
+## Giao diện kỹ thuật của dụng cụ
 
-Phân vị: sắp xếp các mẫu và nội suy ở vị trí `(n-1)*q`, giống `numpy.quantile(method="linear")`.
-Tự kiểm `n=iterations`, p50 ≤ p95, ms không âm/hữu hạn, không gộp warm-up vào mẫu đo. Chỉ so p95 cùng thiết bị, thư viện, nhóm ảnh, dtype, batch và ranh giới đo.
+`run(config, adapter, output, base)` là giao diện tổng quát của bộ đo, chưa phải pipeline nhóm đã tích hợp. Adapter cung cấp `load(config, base)`, `decode(spec, base)`, `predict(input)`, `image_score(result)` và `synchronize()`. Bộ đo gọi load một lần, đối chiếu điểm trước warm-up và giữ warm-up ngoài CSV đo chính. Đường dẫn đầu vào tương đối với thư mục config.
 
-Mẫu CSV **chỉ minh họa định dạng**:
+Các trường `run_id`, `measurement_id`, `image_group`, `device` trong CSV là metadata do bên gọi cung cấp. Việc ánh xạ chúng sang baseline/quality của nhóm chưa được chốt trong bản này. Không dùng giá trị giả lập làm mã hoặc số liệu mô hình thật.
 
-```csv
-run_id,measurement_id,image_group,device,image_id,iteration,latency_ms
-pilot01-greedy-s0,pilot01-greedy-s0-l4-session01,product_split_light,cuda:0,img001,0,10.0
-```
+## Phạm vi xác minh và giới hạn
 
-## 6. Bank/index và bộ nhớ đỉnh
+Đã kiểm: phân vị, thứ tự đồng bộ/đồng hồ qua mock, nạp một lần, số dòng và thứ tự mẫu, tách warm-up, dừng khi điểm tham chiếu sai, không ghi đè output, kiểm byte theo vai trò và helper chọn coreset. Bảy phép kiểm hiện tại không yêu cầu baseline từ thành viên khác.
 
-Trong config, liệt kê mỗi tệp kèm vai trò: `bank_index`, `backbone`, `metadata`, `intermediate`. `artifacts.json` ghi byte thực và SHA-256 từng tệp; tổng bank/index chỉ cộng `bank_index`, **1 MB = 1.000.000 byte**. Tệp params/metadata và trọng số báo riêng. Nếu index đã chứa vector, raw bank trùng nội dung chỉ là `intermediate` khi không cần để triển khai. Nếu thực sự cần cả hai, ghi lý do và tính cả hai; không tự suy luận từ phần mở rộng tệp.
+RSS dùng psutil lấy mẫu mỗi 5 ms trong tiến trình hiện tại. Peak quan sát có thể bỏ sót cấp phát ngắn và gồm cả chi phí ghi log; không bao quát tiến trình con. Nhánh CUDA và bộ đếm PyTorch có trong dụng cụ tổng quát nhưng **chưa được chạy xác minh trên GPU**; không có khẳng định về tổng peak VRAM, FAISS hoặc kết quả L4 từ bản bàn giao này.
 
-RAM: psutil lấy RSS tiến trình trước vòng đo và mỗi 5 ms, lưu `rss_samples.csv`. `memory.json` ghi peak quan sát tuyệt đối và tăng thêm so baseline. **Peak lấy mẫu có thể bỏ sót đỉnh ngắn**, gồm cả chi phí ghi log/đo của tiến trình; không gọi là peak chính xác. Không bao quát tiến trình con.
-
-VRAM: reset bộ đếm PyTorch **sau warm-up, ngay trước vòng đo**, ghi baseline allocated/reserved và max allocated/reserved. Bộ đếm bao gồm phần model/bank do PyTorch giữ, **không bao gồm FAISS/CUDA ngoài allocator PyTorch**. Không xem phần chênh lệch là tổng footprint mô hình. Nếu truy vấn GPU dùng FAISS, cần thống nhất thêm công cụ cấp tiến trình và cách lấy peak; hiện báo `gpu_process_peak=not measured`.
-
-## 7. Chi phí chọn coreset
-
-Dùng `measure_selection` trong `scripts/profile.py` sau khi đã có ma trận train features. Chuẩn bị feature/seed trước đồng hồ; đồng bộ hai phía. Callback chỉ làm chọn coreset và trả chỉ số hoặc bank theo ranh giới đã ghi. Ghi `run_id`, `measurement_id`, seed, budget, số patch đầu vào và nội dung đo (projection, chọn patch, gather, chuyển thiết bị có nằm trong phép đo không). Không gọi `fit` toàn bộ rồi gọi đó là thời gian chọn. Nếu Phúc chỉ giao bank mà không có feature/lệnh chọn/log gốc, mục này **chưa đo được**.
-
-## 8. Bàn giao và ghép chất lượng
-
-`run_id` là mã **cấu hình + seed** do baseline dùng; giữ nguyên để ghép chất lượng. `measurement_id` phân biệt các lần đo lặp và thiết bị, không đổi run ID chỉ vì chạy lại đồng hồ. Mỗi thư mục có config, environment, artifacts, hashes ảnh, validation, warmup, timings, RSS samples, memory, stability, efficiency và status. `status=failed` không phải lượt hợp lệ dù đã có một phần CSV.
-
-`efficiency.csv` có run ID, measurement ID, nhóm ảnh, device, commit, seed, budget, số patch, byte/MB bank, số warm-up, số mẫu, p50/p95 và đường dẫn log tương đối trong thư mục của lượt đo. Tên GPU/VRAM nằm trong `environment.json`, cùng cấu hình `device=cuda:0`. Giữ nguyên thư mục khi chuyển log.
-
-Khi Đỗ Hoàng Phúc giao `quality.csv`, thống nhất `image_group` và ngưỡng/split. Script ghép yêu cầu đúng một hàng chất lượng cho mỗi khóa `run_id,image_group` (thêm `device` nếu có trong quality); lọc rõ ngưỡng trước khi ghép. Không tự tính AUROC, độ nhạy hay báo động giả thay người phụ trách.
-
-```bash
-python -m scripts.join_quality --efficiency outputs/RUN1/efficiency.csv outputs/RUN2/efficiency.csv --quality quality.csv --output quality-efficiency.csv
-```
-
-Script dừng khi thiếu hoặc trùng khóa để tránh nhân số hàng hay mất nhóm. Nhiều measurement ID/thiết bị vẫn được giữ riêng. Không ghép chất lượng thật với `smoke-only`.
-
-Đầu ra cho Huy: lệnh chạy, commit bộ đo và baseline, notebook/môi trường, run ID, measurement ID, toàn bộ log thô và bảng hiệu năng. Không commit MVTec, feature cache, bank lớn hoặc trọng số; chờ nhóm chọn nơi lưu chung.
+Chỉ bổ sung phạm vi đo mô hình, tolerance, config và lệnh chạy thật sau khi nhận đủ xác nhận từ nhóm. Các bản nháp phụ thuộc đầu vào đó được giữ cục bộ theo yêu cầu của Tiến.
